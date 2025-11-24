@@ -1,6 +1,7 @@
 import fs from "fs/promises";
 import path from "path";
 import inquirer from "inquirer";
+import chalk from "chalk";
 import { logger } from "../../utils/index.js";
 
 const DEFAULT_CONFIG = {
@@ -31,18 +32,20 @@ export async function initCommand() {
   const configPath = path.join(cwd, "purgecode.config.json");
   const ignorePath = path.join(cwd, ".codepruneignore");
 
+  console.log("\n" + chalk.bold.blue("⚙️  Initializing PurgeCode Configuration\n"));
+
   try {
     await fs.access(configPath);
     const { overwrite } = await inquirer.prompt([
       {
         type: "confirm",
         name: "overwrite",
-        message: "purgecode.config.json already exists. Overwrite?",
+        message: chalk.yellow("⚠️  purgecode.config.json already exists. Overwrite?"),
         default: false,
       },
     ]);
     if (!overwrite) {
-      logger.info("Aborted.");
+      logger.info("❌ Initialization aborted.");
       return;
     }
   } catch {
@@ -61,26 +64,32 @@ export async function initCommand() {
     {
       type: "list",
       name: "projectType",
-      message: "What type of project is this?",
-      choices: ["Node.js", "React", "Vue", "Next.js", "Other"],
+      message: chalk.cyan("📦 What type of project is this?"),
+      choices: [
+        { name: chalk.green("Node.js") + " - Backend/CLI projects", value: "Node.js" },
+        { name: chalk.blue("React") + " - React applications", value: "React" },
+        { name: chalk.green("Vue") + " - Vue.js applications", value: "Vue" },
+        { name: chalk.cyan("Next.js") + " - Next.js full-stack apps", value: "Next.js" },
+        { name: chalk.gray("Other") + " - Custom setup", value: "Other" },
+      ],
       default: "Node.js",
     },
     {
       type: "input",
       name: "srcDir",
-      message: "Where are your source files located?",
+      message: chalk.cyan("📁 Where are your source files located?"),
       default: "src",
     },
     {
       type: "confirm",
       name: "gitAware",
-      message: "Enable Git-aware mode (skip modified/staged files)?",
+      message: chalk.cyan("🔒 Enable Git-aware mode (skip modified/staged files)?"),
       default: true,
     },
     {
       type: "confirm",
       name: "dryRun",
-      message: "Enable dry-run by default?",
+      message: chalk.cyan("👁️  Enable dry-run by default (preview changes)?"),
       default: true,
     },
   ]);
@@ -138,7 +147,7 @@ export async function initCommand() {
   }
 
   await fs.writeFile(configPath, JSON.stringify(config, null, 2));
-  logger.success("Created purgecode.config.json");
+  logger.success("✅ Created purgecode.config.json");
 
   // Create .codepruneignore if it doesn't exist
   try {
@@ -152,8 +161,12 @@ coverage
 .git
     `.trim();
     await fs.writeFile(ignorePath, defaultIgnore);
-    logger.success("Created .codepruneignore");
+    logger.success("✅ Created .codepruneignore");
   }
 
-  logger.info("You can now run: purgecode prune");
+  console.log("\n" + chalk.bold.green("🎉 Configuration initialized successfully!\n"));
+  console.log(chalk.dim("Next steps:"));
+  console.log(chalk.cyan("  1. Review purgecode.config.json"));
+  console.log(chalk.cyan("  2. Run: ") + chalk.bold("purgecode prune"));
+  console.log(chalk.dim("\n💡 Tip: Always commit your changes before running purgecode for safety!\n"));
 }
