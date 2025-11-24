@@ -3,7 +3,7 @@
 // We will import the compiled JS from lib/index.js after building
 try {
   // Dynamic import to handle the fact that lib might not exist yet during dev
-  const mainModule = await import("../lib/index.js");
+  const mainModule = await import("../lib/cli/index.js");
   const main = mainModule.default;
   await main();
 } catch (error) {

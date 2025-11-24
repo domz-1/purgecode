@@ -1,0 +1,27 @@
+{
+  "include": [
+    "src/**/*.{ts,tsx,js,jsx}"
+  ],
+  "exclude": [
+    "node_modules/**",
+    "dist/**",
+    "build/**",
+    "**/*.test.{ts,js}",
+    "**/*.spec.{ts,js}"
+  ],
+  "entryPoints": [
+    "lib/index.js",
+    "src/index.{ts,tsx,js,jsx}"
+  ],
+  "dryRun": true,
+  "reportFormat": "markdown",
+  "git": {
+    "respectGitignore": true,
+    "skipTrackedFiles": false
+  },
+  "analysis": {
+    "followDynamicImports": true,
+    "checkBarrelExports": true,
+    "scanConfigFiles": true
+  }
+}
