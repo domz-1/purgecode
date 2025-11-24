@@ -1,0 +1,23 @@
+{
+    "ignorePaths": [
+        "node_modules",
+        "dist",
+        "build"
+    ],
+    "ignoreComments": [
+        "codeprune-ignore"
+    ],
+    "previewMode": false,
+    "fileExtensions": [
+        "js",
+        "ts",
+        "jsx",
+        "tsx"
+    ],
+    "removeComments": true,
+    "removeConsole": true,
+    "trimLines": true,
+    "removeUnusedFiles": true,
+    "removeUnusedImports": true,
+    "formatWithPrettier": true
+}

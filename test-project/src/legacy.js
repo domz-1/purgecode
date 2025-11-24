@@ -1,7 +1,3 @@
-const fs = require("fs");
-
-function oldSchool() {
-  var x = 1;
-}
+function oldSchool() {}
 
 module.exports = { oldSchool };
