@@ -30,7 +30,7 @@ yarn global add purgecode
 3.  Follow the interactive prompts to configure your project type and preferences.
 4.  This will create:
     -   `purgecode.config.json`: Your configuration file.
-    -   `.codepruneignore`: A file to list paths to ignore (like `.gitignore`).
+    -   `.purgecodeignore`: A file to list paths to ignore (like `.gitignore`).
 
 ## Basic Usage
 

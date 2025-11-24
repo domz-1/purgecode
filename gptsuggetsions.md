@@ -69,7 +69,7 @@ purgecode/
 │   ├── plugins.md
 │   └── faq.md
 ├── dist/                         # Build output (gitignored)
-├── .codepruneignore             # Project-specific ignores
+├── .purgecodeignore             # Project-specific ignores
 ├── purgecode.config.json        # Default config
 ├── package.json
 ├── tsconfig.json
@@ -90,7 +90,7 @@ purgecode/
 - Generates `purgecode.config.json` with sensible defaults
 - Interactive prompts for project-specific settings
 - Auto-detects project type (React, Node.js, Vue, etc.)
-- Creates `.codepruneignore` file
+- Creates `.purgecodeignore` file
 - Suggests appropriate ignore patterns
 
 ```bash

@@ -1,7 +1,7 @@
 import fs from "fs/promises";
 import path from "path";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { initCommand } from "../../src/cli/commands/init";
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 
 vi.mock("inquirer", () => ({
   default: {
@@ -19,19 +19,15 @@ describe("init command", () => {
   const testDir = path.join(__dirname, "../fixtures/test-project");
 
   beforeEach(async () => {
-    // Create test directory
     await fs.mkdir(testDir, { recursive: true });
     process.chdir(testDir);
   });
 
   afterEach(async () => {
-    // Clean up
     process.chdir(__dirname);
     try {
       await fs.rm(testDir, { recursive: true, force: true });
-    } catch {
-      // Ignore
-    }
+    } catch {}
   });
 
   it("should create purgecode.config.json with default settings", async () => {

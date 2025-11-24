@@ -5,12 +5,7 @@ import inquirer from "inquirer";
 import path from "path";
 import { Project } from "ts-morph";
 import util from "util";
-import { createBackup, restoreBackup } from "../../utils/backup.js";
-import {
-  generateConfigFile,
-  loadConfig,
-  mergeConfig,
-} from "../../utils/config.js";
+import { scanFiles } from "../../core/analyzer.js";
 import {
   checkUnusedDependencies,
   removeUnusedDependencies,
@@ -25,7 +20,12 @@ import {
   removeUnusedImports,
   removeUnusedVariables,
 } from "../../core/pruner.js";
-import { scanFiles } from "../../core/analyzer.js";
+import { createBackup, restoreBackup } from "../../utils/backup.js";
+import {
+  generateConfigFile,
+  loadConfig,
+  mergeConfig,
+} from "../../utils/config.js";
 import { logger, spinner } from "../../utils/index.js";
 
 const execAsync = util.promisify(exec);
@@ -38,7 +38,6 @@ export async function pruneCommand(options: any) {
     return;
   }
 
-  // Handle Restore Mode
   if (options.restore) {
     await restoreBackup(cwd);
     return;
@@ -46,12 +45,10 @@ export async function pruneCommand(options: any) {
 
   const config = await loadConfig(cwd);
 
-  // Generate config file if it doesn't exist
   await generateConfigFile(cwd);
 
   const finalConfig = mergeConfig(config, options);
 
-  // Determine mode
   const hasExplicitActionFlags =
     options.unusedImports ||
     options.unusedVariables ||
@@ -64,19 +61,18 @@ export async function pruneCommand(options: any) {
     options.removeEmpty ||
     options.format;
 
-  // If we have stored selections from a previous pass, skip interactive mode
   const isSubsequentPass = pass > 0 && Array.isArray(options.selectedFeatures);
-  const shouldRunInteractive = !isSubsequentPass && (options.interactive || !hasExplicitActionFlags);
+  const shouldRunInteractive =
+    !isSubsequentPass && (options.interactive || !hasExplicitActionFlags);
 
   let selectedFeatures: string[] = [];
   let isPreview = finalConfig.previewMode;
 
   if (shouldRunInteractive) {
-    // Show git commit warning
-    console.log("\n" + chalk.bold.yellow("⚠️  IMPORTANT SAFETY REMINDER\n"));
-    console.log(chalk.yellow("Before proceeding, please ensure you have committed your changes to Git!"));
-    console.log(chalk.yellow("This allows you to easily revert if something goes wrong.\n"));
-    console.log(chalk.dim("Run: ") + chalk.bold("git add . && git commit -m 'Before purgecode cleanup'\n"));
+    console.log(
+      chalk.dim("Run: ") +
+        chalk.bold("git add . && git commit -m 'Before purgecode cleanup'\n"),
+    );
 
     console.log(chalk.bold.cyan("🧹 PurgeCode - Code Cleanup Tasks\n"));
 
@@ -87,52 +83,72 @@ export async function pruneCommand(options: any) {
         message: chalk.cyan("Select cleanup tasks to perform:"),
         choices: [
           {
-            name: chalk.green("📦 Remove Unused Imports") + chalk.dim(" (.ts, .js, .tsx, .jsx)"),
+            name:
+              chalk.green("📦 Remove Unused Imports") +
+              chalk.dim(" (.ts, .js, .tsx, .jsx)"),
             value: "unusedImports",
             checked: finalConfig.removeUnusedImports,
           },
           {
-            name: chalk.green("🔤 Remove Unused Variables") + chalk.dim(" (local scope)"),
+            name:
+              chalk.green("🔤 Remove Unused Variables") +
+              chalk.dim(" (local scope)"),
             value: "unusedVariables",
             checked: false,
           },
           {
-            name: chalk.green("⚙️  Remove Unused Declarations") + chalk.dim(" (functions, classes)"),
+            name:
+              chalk.green("⚙️  Remove Unused Declarations") +
+              chalk.dim(" (functions, classes)"),
             value: "unusedDeclarations",
             checked: false,
           },
           {
-            name: chalk.green("📄 Remove Unused Files") + chalk.dim(" (.ts, .js, .tsx, .jsx)"),
+            name:
+              chalk.green("📄 Remove Unused Files") +
+              chalk.dim(" (.ts, .js, .tsx, .jsx)"),
             value: "unusedFiles",
             checked: finalConfig.removeUnusedFiles,
           },
           {
-            name: chalk.blue("📊 Check Unused Dependencies") + chalk.dim(" (npm packages)"),
+            name:
+              chalk.blue("📊 Check Unused Dependencies") +
+              chalk.dim(" (npm packages)"),
             value: "unusedDependencies",
             checked: false,
           },
           {
-            name: chalk.blue("🗑️  Remove Unused Dependencies") + chalk.dim(" (from package.json)"),
+            name:
+              chalk.blue("🗑️  Remove Unused Dependencies") +
+              chalk.dim(" (from package.json)"),
             value: "removeUnusedDependencies",
             checked: false,
           },
           {
-            name: chalk.magenta("🖨️  Remove Console Logs") + chalk.dim(" (console.log, warn, error)"),
+            name:
+              chalk.magenta("🖨️  Remove Console Logs") +
+              chalk.dim(" (console.log, warn, error)"),
             value: "removeConsole",
             checked: finalConfig.removeConsole,
           },
           {
-            name: chalk.magenta("💬 Remove Comments") + chalk.dim(" (// and /* */)"),
+            name:
+              chalk.magenta("💬 Remove Comments") +
+              chalk.dim(" (// and /* */)"),
             value: "removeComments",
             checked: finalConfig.removeComments,
           },
           {
-            name: chalk.red("🧹 Remove Empty Files & Folders") + chalk.dim(" (cleanup)"),
+            name:
+              chalk.red("🧹 Remove Empty Files & Folders") +
+              chalk.dim(" (cleanup)"),
             value: "removeEmpty",
             checked: finalConfig.removeEmpty,
           },
           {
-            name: chalk.cyan("✨ Format with Prettier") + chalk.dim(" (code formatting)"),
+            name:
+              chalk.cyan("✨ Format with Prettier") +
+              chalk.dim(" (code formatting)"),
             value: "format",
             checked: finalConfig.formatWithPrettier,
           },
@@ -141,19 +157,20 @@ export async function pruneCommand(options: any) {
       {
         type: "confirm",
         name: "preview",
-        message: chalk.cyan("👁️  Run in Preview Mode? (no changes will be written)"),
+        message: chalk.cyan(
+          "👁️  Run in Preview Mode? (no changes will be written)",
+        ),
         default: finalConfig.previewMode,
       },
     ]);
 
     selectedFeatures = answers.features;
     isPreview = answers.preview;
-    // Store choices for subsequent passes
+
     options.selectedFeatures = selectedFeatures;
     options.previewMode = isPreview;
     options.interactive = false;
   } else if (options.selectedFeatures) {
-    // Use stored choices from previous pass
     selectedFeatures = options.selectedFeatures;
     isPreview = options.previewMode;
   } else {
@@ -178,7 +195,6 @@ export async function pruneCommand(options: any) {
   let files = await scanFiles(cwd, finalConfig);
   spinner.succeed(`Found ${files.length} files.`);
 
-  // Git-aware mode: Skip modified/staged files
   if (options.gitAware || finalConfig.git?.skipTrackedFiles) {
     const isGit = await import("../../utils/git.js").then((m) =>
       m.isGitRepo(cwd),
@@ -202,12 +218,10 @@ export async function pruneCommand(options: any) {
     return;
   }
 
-  // Ensure entryPoints exists
   if (!finalConfig.entryPoints) {
     finalConfig.entryPoints = [];
   }
 
-  // 4. Scan config files for additional entry points
   if (finalConfig.analysis?.scanConfigFiles) {
     spinner.text = "Scanning config files for entry points...";
     const { scanConfigFiles } = await import("../../core/config-scanner.js");
@@ -216,7 +230,7 @@ export async function pruneCommand(options: any) {
       logger.info(
         `Detected ${configEntryPoints.length} entry points from config files.`,
       );
-      // Add to entryPoints if not already present
+
       configEntryPoints.forEach((ep) => {
         if (!finalConfig.entryPoints!.includes(ep)) {
           finalConfig.entryPoints!.push(ep);
@@ -225,7 +239,6 @@ export async function pruneCommand(options: any) {
     }
   }
 
-  // 5. Initialize Project
   spinner.text = "Analyzing project structure...";
   const tsConfigPath = path.join(cwd, "tsconfig.json");
   const project = new Project({
@@ -233,21 +246,17 @@ export async function pruneCommand(options: any) {
     skipAddingFilesFromTsConfig: false,
     compilerOptions: {
       allowJs: true,
-      jsx: 2, // React
+      jsx: 2,
       strict: false,
       noImplicitAny: false,
       skipLibCheck: true,
-      moduleResolution: 2, // Node
+      moduleResolution: 2,
     },
   });
 
   files.forEach((file) => project.addSourceFileAtPath(file));
   spinner.succeed("Project initialized.");
 
-  // Debug: List loaded files
-  // project.getSourceFiles().forEach(sf => console.log(`Loaded: ${sf.getFilePath()}`));
-
-  // --- Analysis & Transformation ---
   let unusedImportsCount = 0;
   let unusedVariablesCount = 0;
   let unusedDeclarationsCount = 0;
@@ -259,10 +268,9 @@ export async function pruneCommand(options: any) {
   let emptyFilesRemoved = 0;
   let emptyFoldersRemoved = 0;
 
-  // 1. Unused Files
   if (selectedFeatures.includes("unusedFiles")) {
     unusedFiles = findUnusedFiles(project);
-    // Filter out files with ignore comments
+
     unusedFiles = await Promise.all(
       unusedFiles.map(async (filePath) => {
         const content = await fs.readFile(filePath, "utf-8");
@@ -281,7 +289,6 @@ export async function pruneCommand(options: any) {
     }
   }
 
-  // 2. Unused Dependencies
   if (
     selectedFeatures.includes("unusedDependencies") ||
     selectedFeatures.includes("removeUnusedDependencies")
@@ -307,8 +314,6 @@ export async function pruneCommand(options: any) {
     }
   }
 
-  // 3. AST Transformations
-  // Resolve prettier config once to avoid repeated file system searches
   let prettierConfig: any = null;
   if (selectedFeatures.includes("format")) {
     try {
@@ -324,7 +329,6 @@ export async function pruneCommand(options: any) {
   for (const sourceFile of project.getSourceFiles()) {
     fileIndex++;
 
-    // Skip files with ignore comments
     const content = sourceFile.getFullText();
     const hasIgnore = finalConfig.ignoreComments.some((comment) =>
       content.includes(comment),
@@ -363,7 +367,6 @@ export async function pruneCommand(options: any) {
     }
   }
 
-  // --- Execution / Reporting ---
   const changesMade =
     unusedImportsCount +
       unusedVariablesCount +
@@ -374,29 +377,59 @@ export async function pruneCommand(options: any) {
     0;
 
   if (isPreview) {
-    console.log("\n" + chalk.bold.cyan("📋 Preview - Summary of Potential Changes:\n"));
-    if (unusedImportsCount > 0) console.log(chalk.green(`  ✓ Unused imports to remove: ${unusedImportsCount}`));
-    if (unusedVariablesCount > 0) console.log(chalk.green(`  ✓ Unused variables to remove: ${unusedVariablesCount}`));
-    if (unusedDeclarationsCount > 0) console.log(chalk.green(`  ✓ Unused declarations to remove: ${unusedDeclarationsCount}`));
-    if (consoleRemovedCount > 0) console.log(chalk.green(`  ✓ Console logs to remove: ${consoleRemovedCount}`));
-    if (commentsRemovedCount > 0) console.log(chalk.green(`  ✓ Comments to remove: ${commentsRemovedCount}`));
-    if (unusedFiles.length > 0) console.log(chalk.green(`  ✓ Files to delete: ${unusedFiles.length}`));
-    if (unusedDeps.length > 0) console.log(chalk.green(`  ✓ Unused dependencies: ${unusedDeps.length}`));
-    if (selectedFeatures.includes("removeUnusedDependencies") && unusedDeps.length > 0) {
-      console.log(chalk.green(`  ✓ Unused dependencies to remove: ${unusedDeps.length}`));
+    console.log(
+      "\n" + chalk.bold.cyan("📋 Preview - Summary of Potential Changes:\n"),
+    );
+    if (unusedImportsCount > 0)
+      console.log(
+        chalk.green(`  ✓ Unused imports to remove: ${unusedImportsCount}`),
+      );
+    if (unusedVariablesCount > 0)
+      console.log(
+        chalk.green(`  ✓ Unused variables to remove: ${unusedVariablesCount}`),
+      );
+    if (unusedDeclarationsCount > 0)
+      console.log(
+        chalk.green(
+          `  ✓ Unused declarations to remove: ${unusedDeclarationsCount}`,
+        ),
+      );
+    if (consoleRemovedCount > 0)
+      console.log(
+        chalk.green(`  ✓ Console logs to remove: ${consoleRemovedCount}`),
+      );
+    if (commentsRemovedCount > 0)
+      console.log(
+        chalk.green(`  ✓ Comments to remove: ${commentsRemovedCount}`),
+      );
+    if (unusedFiles.length > 0)
+      console.log(chalk.green(`  ✓ Files to delete: ${unusedFiles.length}`));
+    if (unusedDeps.length > 0)
+      console.log(chalk.green(`  ✓ Unused dependencies: ${unusedDeps.length}`));
+    if (
+      selectedFeatures.includes("removeUnusedDependencies") &&
+      unusedDeps.length > 0
+    ) {
+      console.log(
+        chalk.green(`  ✓ Unused dependencies to remove: ${unusedDeps.length}`),
+      );
     }
     if (selectedFeatures.includes("removeEmpty")) {
       const emptyCount = project
         .getSourceFiles()
         .filter((sf) => sf.getFullText().trim() === "").length;
-      if (emptyCount > 0) console.log(chalk.green(`  ✓ Empty files to remove: ${emptyCount}`));
+      if (emptyCount > 0)
+        console.log(chalk.green(`  ✓ Empty files to remove: ${emptyCount}`));
     }
-    console.log("\n" + chalk.dim("💡 Tip: Run without --preview flag to apply these changes"));
-    console.log(chalk.dim("⚠️  Remember to commit your changes before applying!\n"));
+    console.log(
+      "\n" +
+        chalk.dim("💡 Tip: Run without --preview flag to apply these changes"),
+    );
+    console.log(
+      chalk.dim("⚠️  Remember to commit your changes before applying!\n"),
+    );
   } else {
-    // BACKUP
     if (options.backup !== false) {
-      // Enabled by default
       spinner.start("Creating backup...");
       const backupPath = await createBackup(cwd, files);
       if (backupPath) {
@@ -406,7 +439,6 @@ export async function pruneCommand(options: any) {
       }
     }
 
-    // Remove Unused Dependencies
     if (selectedFeatures.includes("removeUnusedDependencies")) {
       spinner.start("Removing unused dependencies...");
       removedDepsCount = await removeUnusedDependencies(
@@ -425,7 +457,6 @@ export async function pruneCommand(options: any) {
 
     spinner.start("Applying changes...");
 
-    // Save each file individually to ensure changes are written
     const unsavedFiles = project.getSourceFiles().filter((sf) => !sf.isSaved());
     for (const sourceFile of unsavedFiles) {
       await sourceFile.save();
@@ -433,7 +464,6 @@ export async function pruneCommand(options: any) {
 
     spinner.succeed("Changes applied successfully!");
 
-    // Handle file deletion
     if (unusedFiles.length > 0 && selectedFeatures.includes("unusedFiles")) {
       if (shouldRunInteractive) {
         const { filesToDelete } = await inquirer.prompt([
@@ -475,26 +505,36 @@ export async function pruneCommand(options: any) {
       }
     }
 
-    // Summary
     console.log("\n" + chalk.bold.green("✨ Cleanup Complete - Summary:\n"));
     if (unusedImportsCount > 0)
-      console.log(chalk.green(`  ✓ Removed unused imports: ${unusedImportsCount}`));
+      console.log(
+        chalk.green(`  ✓ Removed unused imports: ${unusedImportsCount}`),
+      );
     if (unusedVariablesCount > 0)
-      console.log(chalk.green(`  ✓ Removed unused variables: ${unusedVariablesCount}`));
+      console.log(
+        chalk.green(`  ✓ Removed unused variables: ${unusedVariablesCount}`),
+      );
     if (unusedDeclarationsCount > 0)
       console.log(
-        chalk.green(`  ✓ Removed unused declarations: ${unusedDeclarationsCount}`),
+        chalk.green(
+          `  ✓ Removed unused declarations: ${unusedDeclarationsCount}`,
+        ),
       );
     if (consoleRemovedCount > 0)
-      console.log(chalk.green(`  ✓ Removed console logs: ${consoleRemovedCount}`));
+      console.log(
+        chalk.green(`  ✓ Removed console logs: ${consoleRemovedCount}`),
+      );
     if (commentsRemovedCount > 0)
       console.log(chalk.green(`  ✓ Removed comments: ${commentsRemovedCount}`));
     if (unusedDeps.length > 0)
-      console.log(chalk.green(`  ✓ Unused dependencies found: ${unusedDeps.length}`));
+      console.log(
+        chalk.green(`  ✓ Unused dependencies found: ${unusedDeps.length}`),
+      );
     if (removedDepsCount > 0)
-      console.log(chalk.green(`  ✓ Removed unused dependencies: ${removedDepsCount}`));
+      console.log(
+        chalk.green(`  ✓ Removed unused dependencies: ${removedDepsCount}`),
+      );
 
-    // Run lint if available
     try {
       const packageJsonPath = path.join(cwd, "package.json");
       const packageJson = JSON.parse(
@@ -557,8 +597,15 @@ export async function pruneCommand(options: any) {
       console.log("\n" + chalk.bold.yellow("🔒 NEXT STEPS:\n"));
       console.log(chalk.yellow("1. Review the changes made"));
       console.log(chalk.yellow("2. Run tests to ensure everything works"));
-      console.log(chalk.yellow("3. Commit your changes: ") + chalk.bold("git add . && git commit -m 'Code cleanup with purgecode'"));
-      console.log(chalk.dim("\n✨ Your code is now cleaner and more maintainable!\n"));
+      console.log(
+        chalk.yellow("3. Commit your changes: ") +
+          chalk.bold(
+            "git add . && git commit -m 'Code cleanup with purgecode'",
+          ),
+      );
+      console.log(
+        chalk.dim("\n✨ Your code is now cleaner and more maintainable!\n"),
+      );
     }
   }
 }
