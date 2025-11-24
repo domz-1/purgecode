@@ -1,0 +1,257 @@
+import { Command } from 'commander';
+import inquirer from 'inquirer';
+import chalk from 'chalk';
+import { scanFiles } from './scanner.js';
+import { removeUnusedImports, removeConsole, removeComments, formatFile, removeUnusedVariables } from './operations.js';
+import { findUnusedFiles } from './graph.js';
+import { loadConfig, mergeConfig, generateConfigFile } from './config.js';
+import { logger, spinner } from './utils.js';
+import { Project } from 'ts-morph';
+import path from 'path';
+import fs from 'fs/promises';
+import { createBackup, restoreBackup } from './backup.js';
+import { checkUnusedDependencies } from './dependencies.js';
+
+const program = new Command();
+
+export default async function main() {
+    program
+        .name('codeprune')
+        .description('A CLI tool to clean and prune your codebase')
+        .version('1.0.0')
+        .option('-i, --interactive', 'Run in interactive mode')
+        .option('--preview', 'Run in preview mode (no changes)')
+        .option('--unused-imports', 'Remove unused imports')
+        .option('--unused-variables', 'Remove unused variables')
+        .option('--unused-files', 'Remove unused files')
+        .option('--unused-dependencies', 'Check for unused dependencies')
+        .option('--remove-console', 'Remove console logs')
+        .option('--remove-comments', 'Remove comments')
+        .option('--format', 'Format files with Prettier')
+        .option('--restore', 'Restore from a backup')
+        .option('--no-backup', 'Disable automatic backup');
+
+    program.action(async (options) => {
+        const cwd = process.cwd();
+
+        // Handle Restore Mode
+        if (options.restore) {
+            await restoreBackup(cwd);
+            return;
+        }
+
+        const config = await loadConfig(cwd);
+
+        // Generate config file if it doesn't exist
+        await generateConfigFile(cwd);
+
+        const finalConfig = mergeConfig(config, options);
+
+        // Determine mode
+        const hasExplicitActionFlags =
+            options.unusedImports ||
+            options.unusedFiles ||
+            options.unusedDependencies ||
+            options.removeConsole ||
+            options.removeComments ||
+            options.format;
+
+        const shouldRunInteractive = options.interactive || !hasExplicitActionFlags;
+
+        let selectedFeatures: string[] = [];
+        let isPreview = finalConfig.previewMode;
+
+        if (shouldRunInteractive) {
+            console.log(chalk.bold.blue('Welcome to CodePrune!'));
+
+            const answers = await inquirer.prompt([
+                {
+                    type: 'checkbox',
+                    name: 'features',
+                    message: 'Which cleanup tasks would you like to perform?',
+                    choices: [
+                        { name: 'Remove Unused Imports', value: 'unusedImports', checked: finalConfig.removeUnusedImports },
+                        { name: 'Remove Unused Variables', value: 'unusedVariables', checked: false },
+                        { name: 'Remove Unused Files', value: 'unusedFiles', checked: finalConfig.removeUnusedFiles },
+                        { name: 'Check Unused Dependencies', value: 'unusedDependencies', checked: false },
+                        { name: 'Remove Console Logs', value: 'removeConsole', checked: finalConfig.removeConsole },
+                        { name: 'Remove Comments', value: 'removeComments', checked: finalConfig.removeComments },
+                        { name: 'Format with Prettier', value: 'format', checked: finalConfig.formatWithPrettier },
+                    ],
+                },
+                {
+                    type: 'confirm',
+                    name: 'preview',
+                    message: 'Run in Preview Mode? (No changes will be written)',
+                    default: finalConfig.previewMode,
+                },
+            ]);
+
+            selectedFeatures = answers.features;
+            isPreview = answers.preview;
+        } else {
+            if (finalConfig.removeUnusedImports) selectedFeatures.push('unusedImports');
+            if (options.unusedVariables) selectedFeatures.push('unusedVariables');
+            if (finalConfig.removeUnusedFiles) selectedFeatures.push('unusedFiles');
+            if (options.unusedDependencies) selectedFeatures.push('unusedDependencies');
+            if (finalConfig.removeConsole) selectedFeatures.push('removeConsole');
+            if (finalConfig.removeComments) selectedFeatures.push('removeComments');
+            if (finalConfig.formatWithPrettier) selectedFeatures.push('format');
+        }
+
+        if (isPreview) {
+            logger.info('Running in PREVIEW mode. No files will be modified.');
+        }
+
+        spinner.start('Scanning files...');
+        const files = await scanFiles(cwd, finalConfig);
+        spinner.succeed(`Found ${files.length} files.`);
+
+        if (files.length === 0) {
+            logger.warn('No files found matching the configuration.');
+            return;
+        }
+
+        // Initialize Project
+        const project = new Project({
+            skipAddingFilesFromTsConfig: true,
+            compilerOptions: {
+                allowJs: true,
+                jsx: 2, // React
+            }
+        });
+
+        files.forEach(file => project.addSourceFileAtPath(file));
+        spinner.succeed('Project initialized.');
+
+        // Debug: List loaded files
+        // project.getSourceFiles().forEach(sf => console.log(`Loaded: ${sf.getFilePath()}`));
+
+        // --- Analysis & Transformation ---
+        let unusedImportsCount = 0;
+        let unusedVariablesCount = 0;
+        let consoleRemovedCount = 0;
+        let commentsRemovedCount = 0;
+        let unusedFiles: string[] = [];
+        let unusedDeps: string[] = [];
+
+        // 1. Unused Files
+        if (selectedFeatures.includes('unusedFiles')) {
+            unusedFiles = findUnusedFiles(project);
+            if (unusedFiles.length > 0) {
+                logger.info(`Unused files detected (${unusedFiles.length}):`);
+                unusedFiles.forEach(f => console.log(chalk.gray(`  - ${path.relative(cwd, f)}`)));
+            }
+        }
+
+        // 2. Unused Dependencies
+        if (selectedFeatures.includes('unusedDependencies')) {
+            spinner.start('Checking dependencies...');
+            unusedDeps = await checkUnusedDependencies(cwd, project.getSourceFiles());
+            spinner.stop();
+            if (unusedDeps.length > 0) {
+                logger.info(`Unused dependencies detected (${unusedDeps.length}):`);
+                unusedDeps.forEach(d => console.log(chalk.yellow(`  - ${d}`)));
+            } else {
+                logger.success('No unused dependencies found.');
+            }
+        }
+
+
+        // 3. AST Transformations
+        // Resolve prettier config once to avoid repeated file system searches
+        let prettierConfig: any = null;
+        if (selectedFeatures.includes('format')) {
+            try {
+                prettierConfig = await import('prettier').then(p => p.default.resolveConfig(cwd));
+            } catch {
+                prettierConfig = {};
+            }
+        }
+
+        let fileIndex = 0;
+        for (const sourceFile of project.getSourceFiles()) {
+            fileIndex++;
+
+            if (selectedFeatures.includes('unusedImports')) {
+                unusedImportsCount += removeUnusedImports(sourceFile);
+            }
+            if (selectedFeatures.includes('unusedVariables')) {
+                unusedVariablesCount += removeUnusedVariables(sourceFile);
+            }
+            if (selectedFeatures.includes('removeConsole')) {
+                consoleRemovedCount += removeConsole(sourceFile);
+            }
+            if (selectedFeatures.includes('removeComments')) {
+                commentsRemovedCount += removeComments(sourceFile);
+            }
+            if (selectedFeatures.includes('format')) {
+                await formatFile(sourceFile, prettierConfig);
+            }
+        }
+
+        // --- Execution / Reporting ---
+        if (isPreview) {
+            console.log('\n' + chalk.bold('Summary of potential changes:'));
+            console.log(`  - Unused imports to remove: ${unusedImportsCount > 0 ? 'Yes' : '0'}`);
+            console.log(`  - Unused variables to remove: ${unusedVariablesCount}`);
+            console.log(`  - Console logs to remove: ${consoleRemovedCount}`);
+            console.log(`  - Comments to remove: ${commentsRemovedCount}`);
+            console.log(`  - Files to delete: ${unusedFiles.length}`);
+            console.log(`  - Unused dependencies: ${unusedDeps.length}`);
+        } else {
+            // BACKUP
+            if (options.backup !== false) { // Enabled by default
+                spinner.start('Creating backup...');
+                const backupPath = await createBackup(cwd, files);
+                if (backupPath) {
+                    spinner.succeed(`Backup created at ${path.relative(cwd, backupPath)}`);
+                } else {
+                    spinner.warn('Backup failed or no files to backup.');
+                }
+            }
+
+
+            spinner.start('Applying changes...');
+
+            // Save each file individually to ensure changes are written
+            const unsavedFiles = project.getSourceFiles().filter(sf => !sf.isSaved());
+            for (const sourceFile of unsavedFiles) {
+                await sourceFile.save();
+            }
+
+            spinner.succeed('Changes applied successfully!');
+
+
+            // Handle file deletion
+            if (unusedFiles.length > 0 && selectedFeatures.includes('unusedFiles')) {
+                if (shouldRunInteractive) {
+                    const { confirmDelete } = await inquirer.prompt([{
+                        type: 'confirm',
+                        name: 'confirmDelete',
+                        message: `Delete ${unusedFiles.length} unused files?`,
+                        default: false
+                    }]);
+                    if (confirmDelete) {
+                        await Promise.all(unusedFiles.map(f => fs.unlink(f)));
+                        logger.success(`Deleted ${unusedFiles.length} files.`);
+                    } else {
+                        logger.info('Skipped file deletion.');
+                    }
+                } else {
+                    logger.warn(`Skipping actual deletion of ${unusedFiles.length} files (use interactive mode to delete).`);
+                }
+            }
+
+            // Summary
+            console.log('\n' + chalk.bold('Summary:'));
+            if (unusedImportsCount > 0) console.log(`  - Removed unused imports: ${unusedImportsCount}`);
+            if (unusedVariablesCount > 0) console.log(`  - Removed unused variables: ${unusedVariablesCount}`);
+            if (consoleRemovedCount > 0) console.log(`  - Removed console logs: ${consoleRemovedCount}`);
+            if (commentsRemovedCount > 0) console.log(`  - Removed comments: ${commentsRemovedCount}`);
+            if (unusedDeps.length > 0) console.log(`  - Unused dependencies found: ${unusedDeps.length}`);
+        }
+    });
+
+    program.parse(process.argv);
+}
