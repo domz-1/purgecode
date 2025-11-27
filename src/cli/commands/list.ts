@@ -1,4 +1,4 @@
-import chalk from "chalk";
+// import chalk from "chalk";
 import path from "path";
 import { Project } from "ts-morph";
 import { findUnusedFiles } from "../../core/graph.js";
@@ -65,7 +65,7 @@ export async function listCommand(options: { json?: boolean }) {
         if (unusedFiles.length > 0) {
             logger.info(`Found ${unusedFiles.length} unused files:`);
             unusedFiles.forEach((f) =>
-                console.log(chalk.gray(`  - ${path.relative(cwd, f)}`)),
+                console.log(`  - ${path.relative(cwd, f)}`),
             );
         } else {
             logger.success("No unused files found!");

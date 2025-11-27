@@ -1,7 +1,7 @@
 import fs from "fs/promises";
 import path from "path";
 import inquirer from "inquirer";
-import chalk from "chalk";
+// import chalk from "chalk";
 import { logger } from "../../utils/index.js";
 
 const DEFAULT_CONFIG = {
@@ -32,7 +32,7 @@ export async function initCommand() {
   const configPath = path.join(cwd, "purgecode.config.json");
   const ignorePath = path.join(cwd, ".codepruneignore");
 
-  console.log("\n" + chalk.bold.blue("⚙️  Initializing PurgeCode Configuration\n"));
+  console.log("\n" + "⚙️  Initializing PurgeCode Configuration\n");
 
   try {
     await fs.access(configPath);
@@ -40,7 +40,7 @@ export async function initCommand() {
       {
         type: "confirm",
         name: "overwrite",
-        message: chalk.yellow("⚠️  purgecode.config.json already exists. Overwrite?"),
+        message: "⚠️  purgecode.config.json already exists. Overwrite?",
         default: false,
       },
     ]);
@@ -64,32 +64,32 @@ export async function initCommand() {
     {
       type: "list",
       name: "projectType",
-      message: chalk.cyan("📦 What type of project is this?"),
+      message: "📦 What type of project is this?",
       choices: [
-        { name: chalk.green("Node.js") + " - Backend/CLI projects", value: "Node.js" },
-        { name: chalk.blue("React") + " - React applications", value: "React" },
-        { name: chalk.green("Vue") + " - Vue.js applications", value: "Vue" },
-        { name: chalk.cyan("Next.js") + " - Next.js full-stack apps", value: "Next.js" },
-        { name: chalk.gray("Other") + " - Custom setup", value: "Other" },
+        { name: "Node.js" + " - Backend/CLI projects", value: "Node.js" },
+        { name: "React" + " - React applications", value: "React" },
+        { name: "Vue" + " - Vue.js applications", value: "Vue" },
+        { name: "Next.js" + " - Next.js full-stack apps", value: "Next.js" },
+        { name: "Other" + " - Custom setup", value: "Other" },
       ],
       default: "Node.js",
     },
     {
       type: "input",
       name: "srcDir",
-      message: chalk.cyan("📁 Where are your source files located?"),
+      message: "📁 Where are your source files located?",
       default: "src",
     },
     {
       type: "confirm",
       name: "gitAware",
-      message: chalk.cyan("🔒 Enable Git-aware mode (skip modified/staged files)?"),
+      message: "🔒 Enable Git-aware mode (skip modified/staged files)?",
       default: true,
     },
     {
       type: "confirm",
       name: "dryRun",
-      message: chalk.cyan("👁️  Enable dry-run by default (preview changes)?"),
+      message: "👁️  Enable dry-run by default (preview changes)?",
       default: true,
     },
   ]);
@@ -164,9 +164,9 @@ coverage
     logger.success("✅ Created .codepruneignore");
   }
 
-  console.log("\n" + chalk.bold.green("🎉 Configuration initialized successfully!\n"));
-  console.log(chalk.dim("Next steps:"));
-  console.log(chalk.cyan("  1. Review purgecode.config.json"));
-  console.log(chalk.cyan("  2. Run: ") + chalk.bold("purgecode prune"));
-  console.log(chalk.dim("\n💡 Tip: Always commit your changes before running purgecode for safety!\n"));
+  console.log("\n" + "🎉 Configuration initialized successfully!\n");
+  console.log("Next steps:");
+  console.log("  1. Review purgecode.config.json");
+  console.log("  2. Run: " + "purgecode prune");
+  console.log("\n💡 Tip: Always commit your changes before running purgecode for safety!\n");
 }

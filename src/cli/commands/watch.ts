@@ -1,5 +1,5 @@
 import chokidar from "chokidar";
-import chalk from "chalk";
+// import chalk from "chalk";
 import path from "path";
 import { Project } from "ts-morph";
 import { findUnusedFiles } from "../../core/graph.js";
@@ -12,8 +12,8 @@ export async function watchCommand() {
     const cwd = process.cwd();
     const config = await loadConfig(cwd);
 
-    logger.info(chalk.blue("Starting watch mode..."));
-    logger.info(chalk.gray("Press Ctrl+C to exit."));
+    logger.info("Starting watch mode...");
+    logger.info("Press Ctrl+C to exit.");
 
     let isRunning = false;
     let timeout: NodeJS.Timeout | null = null;
@@ -24,7 +24,7 @@ export async function watchCommand() {
 
         try {
             console.clear();
-            logger.info(chalk.blue("File change detected. Re-analyzing..."));
+            logger.info("File change detected. Re-analyzing...");
 
             const files = await scanFiles(cwd, config);
 
@@ -69,13 +69,13 @@ export async function watchCommand() {
             if (unusedFiles.length > 0) {
                 logger.info(`Found ${unusedFiles.length} unused files:`);
                 unusedFiles.forEach((f) =>
-                    console.log(chalk.gray(`  - ${path.relative(cwd, f)}`)),
+                    console.log(`  - ${path.relative(cwd, f)}`),
                 );
             } else {
                 logger.success("No unused files found!");
             }
 
-            logger.info(chalk.gray("\nWaiting for changes..."));
+            logger.info("\nWaiting for changes...");
 
         } catch (error) {
             logger.error(`Analysis failed: ${error}`);
