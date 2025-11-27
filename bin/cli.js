@@ -7,12 +7,11 @@ try {
   // Dynamic import to handle the fact that lib might not exist yet during dev
   const mainModule = await import("../lib/cli/index.js");
   const main = mainModule.default;
-  
+
   // Show welcome banner
-  console.log("\n" + chalk.bold.cyan("╔════════════════════════════════════════╗"));
-  console.log(chalk.bold.cyan("║") + chalk.bold.white("   🧹 PurgeCode - Code Cleaner CLI   ") + chalk.bold.cyan("║"));
-  console.log(chalk.bold.cyan("╚════════════════════════════════════════╝\n"));
-  
+  const bannerModule = await import("../lib/utils/banner.js");
+  bannerModule.showBanner();
+
   await main();
 } catch (error) {
   if (error.code === "ERR_MODULE_NOT_FOUND") {

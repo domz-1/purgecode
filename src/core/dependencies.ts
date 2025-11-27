@@ -199,6 +199,36 @@ export async function removeUnusedDependencies(
   return unused.length;
 }
 
+export async function removeDependencies(
+  cwd: string,
+  dependencies: string[],
+): Promise<number> {
+  const packageJsonPath = path.join(cwd, "package.json");
+  let packageJson;
+  try {
+    const content = await fs.readFile(packageJsonPath, "utf-8");
+    packageJson = JSON.parse(content);
+  } catch (error) {
+    return 0;
+  }
+
+  if (!packageJson.dependencies) return 0;
+
+  let removedCount = 0;
+  for (const dep of dependencies) {
+    if (packageJson.dependencies[dep]) {
+      delete packageJson.dependencies[dep];
+      removedCount++;
+    }
+  }
+
+  if (removedCount > 0) {
+    await fs.writeFile(packageJsonPath, JSON.stringify(packageJson, null, 2));
+  }
+
+  return removedCount;
+}
+
 function extractPackageName(moduleSpecifier: string, usedDeps: Set<string>) {
   if (!moduleSpecifier) return;
   if (moduleSpecifier.startsWith(".")) return; // Local import

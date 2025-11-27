@@ -13,6 +13,7 @@ import {
 } from "../../utils/config.js";
 import {
   checkUnusedDependencies,
+  removeDependencies,
   removeUnusedDependencies,
 } from "../../core/dependencies.js";
 import { findUnusedFiles } from "../../core/graph.js";
@@ -47,7 +48,28 @@ export async function pruneCommand(options: any) {
   const config = await loadConfig(cwd);
 
   // Generate config file if it doesn't exist
-  await generateConfigFile(cwd);
+  const configPath = path.join(cwd, "purgecode.config.json");
+  let configExists = true;
+  try {
+    await fs.access(configPath);
+  } catch {
+    configExists = false;
+  }
+
+  if (!configExists) {
+    const { createConfig } = await inquirer.prompt([
+      {
+        type: "confirm",
+        name: "createConfig",
+        message: chalk.yellow("Configuration file not found. Do you want to create one? (purgecode.config.json)"),
+        default: true,
+      },
+    ]);
+
+    if (createConfig) {
+      await generateConfigFile(cwd);
+    }
+  }
 
   const finalConfig = mergeConfig(config, options);
 
@@ -70,6 +92,7 @@ export async function pruneCommand(options: any) {
 
   let selectedFeatures: string[] = [];
   let isPreview = finalConfig.previewMode;
+  let shouldBackup = options.backup !== false; // Default true unless --no-backup
 
   if (shouldRunInteractive) {
     // Show git commit warning
@@ -140,6 +163,12 @@ export async function pruneCommand(options: any) {
       },
       {
         type: "confirm",
+        name: "backup",
+        message: chalk.cyan("📦 Create a backup before purging?"),
+        default: true,
+      },
+      {
+        type: "confirm",
         name: "preview",
         message: chalk.cyan("👁️  Run in Preview Mode? (no changes will be written)"),
         default: finalConfig.previewMode,
@@ -148,9 +177,12 @@ export async function pruneCommand(options: any) {
 
     selectedFeatures = answers.features;
     isPreview = answers.preview;
+    shouldBackup = answers.backup;
+
     // Store choices for subsequent passes
     options.selectedFeatures = selectedFeatures;
     options.previewMode = isPreview;
+    options.backup = shouldBackup;
     options.interactive = false;
   } else if (options.selectedFeatures) {
     // Use stored choices from previous pass
@@ -366,11 +398,11 @@ export async function pruneCommand(options: any) {
   // --- Execution / Reporting ---
   const changesMade =
     unusedImportsCount +
-      unusedVariablesCount +
-      unusedDeclarationsCount +
-      consoleRemovedCount +
-      commentsRemovedCount +
-      removedDepsCount >
+    unusedVariablesCount +
+    unusedDeclarationsCount +
+    consoleRemovedCount +
+    commentsRemovedCount +
+    removedDepsCount >
     0;
 
   if (isPreview) {
@@ -395,7 +427,8 @@ export async function pruneCommand(options: any) {
     console.log(chalk.dim("⚠️  Remember to commit your changes before applying!\n"));
   } else {
     // BACKUP
-    if (options.backup !== false) {
+    // BACKUP
+    if (shouldBackup) {
       // Enabled by default
       spinner.start("Creating backup...");
       const backupPath = await createBackup(cwd, files);
@@ -408,8 +441,8 @@ export async function pruneCommand(options: any) {
 
     // Remove Unused Dependencies
     if (selectedFeatures.includes("removeUnusedDependencies")) {
-      spinner.start("Removing unused dependencies...");
-      removedDepsCount = await removeUnusedDependencies(
+      spinner.start("Checking unused dependencies...");
+      const unusedDeps = await checkUnusedDependencies(
         cwd,
         project
           .getSourceFiles()
@@ -420,7 +453,37 @@ export async function pruneCommand(options: any) {
               ),
           ),
       );
-      spinner.succeed(`Removed ${removedDepsCount} unused dependencies.`);
+      spinner.stop();
+
+      if (unusedDeps.length === 0) {
+        logger.success("No unused dependencies to remove.");
+      } else {
+        let depsToRemove = unusedDeps;
+
+        if (shouldRunInteractive) {
+          const { selectedDeps } = await inquirer.prompt([
+            {
+              type: "checkbox",
+              name: "selectedDeps",
+              message: "Select dependencies to remove:",
+              choices: unusedDeps.map((d) => ({
+                name: d,
+                value: d,
+                checked: true,
+              })),
+            },
+          ]);
+          depsToRemove = selectedDeps;
+        }
+
+        if (depsToRemove.length > 0) {
+          spinner.start(`Removing ${depsToRemove.length} dependencies...`);
+          removedDepsCount = await removeDependencies(cwd, depsToRemove);
+          spinner.succeed(`Removed ${removedDepsCount} unused dependencies.`);
+        } else {
+          logger.info("No dependencies selected for removal.");
+        }
+      }
     }
 
     spinner.start("Applying changes...");
