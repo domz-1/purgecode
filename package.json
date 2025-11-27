@@ -1,6 +1,6 @@
 {
   "name": "purgecode",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "A safe, smart code-cleaning utility for JavaScript/TypeScript projects",
   "main": "lib/index.js",
   "type": "module",
