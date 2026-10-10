@@ -33,7 +33,7 @@ export interface Config {
 
 export const defaultConfig: Config = {
   ignorePaths: ["node_modules", "dist", "build", ".git"],
-  ignoreComments: ["purgecode-ignore"],
+  ignoreComments: ["codeprune-ignore"],
   previewMode: false, // Default to making changes, user can enable preview with --preview
   fileExtensions: ["js", "ts", "jsx", "tsx"],
   removeComments: false,

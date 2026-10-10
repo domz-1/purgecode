@@ -90,7 +90,7 @@ export function removeComments(sourceFile: SourceFile): number {
     uniqueComments.sort((a, b) => b.pos - a.pos);
 
     for (const comment of uniqueComments) {
-      if (comment.text.includes("purgecode-ignore")) continue;
+      if (comment.text.includes("codeprune-ignore")) continue;
       sourceFile.replaceText([comment.pos, comment.end], "");
       count++;
     }
